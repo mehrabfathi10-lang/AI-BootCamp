@@ -38,6 +38,60 @@ from data_pipeline import (
 # Label value written by data_pipeline.pack_documents() for padding / document boundaries.
 IGNORE_INDEX = -100
 
+# Public Google Drive share link for the doctor-comments dataset.
+DATASET_DOWNLOAD_URL = (
+    "https://drive.google.com/file/d/17pazo3Iu_5CcWGhXW80vkcS9eZLFj0SI/view?usp=sharing"
+)
+
+
+def ensure_dataset_available(csv_path):
+    """Return a usable CSV path, downloading the shared dataset if it is missing.
+
+    The download is performed lazily so users who provide their own existing CSV
+    do not need the optional gdown package.
+    """
+    if os.path.isfile(csv_path) and os.path.getsize(csv_path) > 0:
+        return csv_path
+
+    try:
+        import gdown
+    except ImportError as exc:
+        raise RuntimeError(
+            "The dataset file was not found and the 'gdown' package is not installed. "
+            "Install it with 'python -m pip install gdown', or download the CSV manually "
+            "from the Google Drive link in README.md."
+        ) from exc
+
+    os.makedirs(os.path.dirname(os.path.abspath(csv_path)), exist_ok=True)
+    print(f"Dataset not found at '{csv_path}'. Downloading it from Google Drive...")
+
+    try:
+        downloaded_path = gdown.download(
+            url=DATASET_DOWNLOAD_URL,
+            output=csv_path,
+            quiet=False,
+            fuzzy=True,
+        )
+    except Exception as exc:
+        if os.path.isfile(csv_path):
+            os.remove(csv_path)
+        raise RuntimeError(
+            "Could not download the dataset from Google Drive. Check your internet "
+            "connection and make sure the file is shared with 'Anyone with the link'."
+        ) from exc
+
+    if not downloaded_path or not os.path.isfile(csv_path) or os.path.getsize(csv_path) == 0:
+        if os.path.isfile(csv_path):
+            os.remove(csv_path)
+        raise RuntimeError(
+            "Google Drive did not return the dataset. Check the sharing permissions "
+            "and download the CSV manually using the instructions in README.md."
+        )
+
+    print(f"Dataset downloaded to: {csv_path}")
+    return csv_path
+
+
 def _softmax_last(x):
     """
     Numerically stable softmax over the last dimension, written with tensor operations only.
@@ -564,7 +618,7 @@ def train_mini_gpt_with_pipeline(csv_path, num_documents=None, num_merges=300, s
     after `patience` evaluations without improvement, and the best weights are restored.
 
     Args:
-        csv_path (str): Path of comments_raw_canonical.csv.
+        csv_path (str): Path to the CSV file containing doctor comments.
         num_documents (Optional[int]): Number of grouped documents to use. None uses all of them.
         num_merges (int): BPE merges learned by the pipeline tokenizer.
         seq_length (int): Block length, also the model's maximum sequence length.
@@ -751,7 +805,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="MiniGPT demos")
     parser.add_argument("--csv", default="comments_raw_canonical.csv",
-                        help="doctor comments CSV used for the data_pipeline training demo")
+                        help="path to the doctor-comments CSV (downloaded from Google Drive if missing)")
     parser.add_argument("--docs", type=int, default=None, help="documents sampled from the CSV (default: all)")
     parser.add_argument("--merges", type=int, default=300, help="BPE merges for the pipeline tokenizer")
     parser.add_argument("--steps", type=int, default=3000, help="maximum training steps for the pipeline demo")
@@ -760,6 +814,14 @@ if __name__ == "__main__":
     parser.add_argument("--only-pipeline", action="store_true", help="skip the tiny built-in corpus demo")
     parser.add_argument("--no-pipeline", action="store_true", help="skip the doctor-comments demo")
     args = parser.parse_args()
+
+    # Download the dataset before running any demos so a missing dependency or
+    # inaccessible Drive file is reported immediately, not after model training.
+    if not args.no_pipeline:
+        try:
+            ensure_dataset_available(args.csv)
+        except RuntimeError as exc:
+            parser.exit(1, f"\nDataset error: {exc}\n")
 
     if not args.only_pipeline:
         torch.manual_seed(42)
@@ -788,18 +850,15 @@ Fine-tuning adapts the pre-trained model to specific downstream tasks."""
         print(f"Generated: {generated_text}")
 
     if not args.no_pipeline:
-        if not os.path.exists(args.csv):
-            print(f"\n{args.csv} not found - skipping the data_pipeline demo (use --csv PATH).")
-        else:
-            print("\nTraining Mini GPT on doctor comments via data_pipeline")
-            print("=" * 65)
-            model, tokenizer, docs = train_mini_gpt_with_pipeline(
-                args.csv, num_documents=args.docs, num_merges=args.merges, num_steps=args.steps,
-                dropout=args.dropout, patience=args.patience)
-            seen_prompt = " ".join(docs[0].split()[:6])
-            print(f"\nPrompt taken from a training document: {seen_prompt!r}")
-            print("Model :", complete_text(model, tokenizer, seen_prompt, max_new_tokens=60, temperature=0.5))
-            print("Actual:", " ".join(docs[0].split()[:25]))
-            for prompt in ("دکتر", "بسیار", "از"):
-                print(f"\nPrompt: {prompt!r}")
-                print(complete_text(model, tokenizer, prompt, max_new_tokens=60, temperature=0.7))
+        print("\nTraining Mini GPT on doctor comments via data_pipeline")
+        print("=" * 65)
+        model, tokenizer, docs = train_mini_gpt_with_pipeline(
+            args.csv, num_documents=args.docs, num_merges=args.merges, num_steps=args.steps,
+            dropout=args.dropout, patience=args.patience)
+        seen_prompt = " ".join(docs[0].split()[:6])
+        print(f"\nPrompt taken from a training document: {seen_prompt!r}")
+        print("Model :", complete_text(model, tokenizer, seen_prompt, max_new_tokens=60, temperature=0.5))
+        print("Actual:", " ".join(docs[0].split()[:25]))
+        for prompt in ("دکتر", "بسیار", "از"):
+            print(f"\nPrompt: {prompt!r}")
+            print(complete_text(model, tokenizer, prompt, max_new_tokens=60, temperature=0.7))

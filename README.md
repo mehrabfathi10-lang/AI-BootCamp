@@ -12,7 +12,7 @@ AI-BootCamp is organized around three connected areas:
 2. **Dataset preparation**: cleaning and normalizing text, filtering low-quality documents, detecting dominant scripts/languages, removing personally identifiable information (PII), detecting near-duplicates, and packing token sequences for language-model training.
 3. **MiniGPT**: a small GPT-like autoregressive Transformer implemented in PyTorch, with causal self-attention, dropout, training and validation loops, early stopping, text generation, and checkpointing.
 
-The included CSV contains Persian-language comments associated with doctors. The training pipeline groups short comments by doctor to create longer documents before preparing them for pre-training.
+The training dataset contains Persian-language comments associated with doctors. It is hosted on Google Drive rather than stored in this GitHub repository. The training pipeline groups short comments by doctor to create longer documents before preparing them for pre-training. The dataset is downloaded automatically on the first pipeline run if it is not already present.
 
 ## Features
 
@@ -51,7 +51,7 @@ The included CSV contains Persian-language comments associated with doctors. The
 
 ```text
 AI-BootCamp/
-├── comments_raw_canonical.csv  # Doctor-comment dataset used by the training pipeline
+├── .gitignore                  # Keeps the downloaded dataset and local artifacts out of Git
 ├── data_pipeline.py            # Text cleaning, filtering, deduplication and data preparation
 ├── mini_gpt_torch.py           # PyTorch MiniGPT model, training and generation
 ├── tokenizer1.py               # Character tokenizer and foundational BPE implementation
@@ -66,6 +66,7 @@ AI-BootCamp/
 - Hazm.
 - `regex` (recommended; `tokenizer2.py` includes a standard-library `re` fallback).
 - `pytest` (only needed to run the unit tests).
+- `gdown` (used to download the dataset from Google Drive automatically when it is missing).
 - `tiktoken` is optional and is only needed for the tokenizer comparison demonstrations.
 
 Create and activate a virtual environment:
@@ -86,7 +87,7 @@ Install packages:
 
 ```bash
 python -m pip install --upgrade pip
-python -m pip install torch hazm regex pytest
+python -m pip install torch hazm regex pytest gdown
 ```
 
 For GPU training, install the PyTorch build that matches your CUDA environment. Follow the official selector at <https://pytorch.org/get-started/locally/> rather than assuming that a generic PyPI installation will enable CUDA.
@@ -106,7 +107,19 @@ git clone <your-repository-url>
 cd AI-BootCamp
 ```
 
-Make sure `comments_raw_canonical.csv` is in the project root, alongside `mini_gpt_torch.py`.
+### Download the dataset
+
+The CSV is hosted on Google Drive and is intentionally not included in this repository:
+
+[Download `comments_raw_canonical.csv` from Google Drive](https://drive.google.com/file/d/17pazo3Iu_5CcWGhXW80vkcS9eZLFj0SI/view?usp=sharing)
+
+You do not need to download it manually if `gdown` is installed: the training script downloads it to the project root automatically the first time you run the pipeline. To download it yourself instead, run:
+
+```bash
+gdown --fuzzy "https://drive.google.com/file/d/17pazo3Iu_5CcWGhXW80vkcS9eZLFj0SI/view?usp=sharing" -O comments_raw_canonical.csv
+```
+
+If the download is unavailable, check that the Google Drive file is shared with **Anyone with the link** and that you have installed `gdown` (`python -m pip install gdown`). Keep the downloaded CSV in the project root, or pass its location with `--csv`.
 
 ### Run MiniGPT
 
@@ -132,7 +145,7 @@ Available command-line options:
 
 | Option | Description | Default |
 |---|---|---:|
-| `--csv` | Path to the input CSV file | `comments_raw_canonical.csv` |
+| `--csv` | Path to the input CSV file; if it does not exist, the Google Drive dataset is downloaded there | `comments_raw_canonical.csv` |
 | `--docs` | Maximum number of grouped documents to use; omit to use all | All |
 | `--merges` | Number of BPE merge operations | `300` |
 | `--steps` | Maximum optimizer steps | `3000` |
@@ -189,7 +202,7 @@ This runs the pipeline on a built-in sample corpus and prints statistics. It doe
 
 ## Dataset format
 
-The provided `comments_raw_canonical.csv` uses the following columns:
+The Google Drive file `comments_raw_canonical.csv` uses the following columns:
 
 | Column | Description |
 |---|---|
@@ -242,7 +255,7 @@ Early stopping, best-checkpoint saving and sample generation
 - This is a compact educational implementation. Training quality depends heavily on dataset size and quality, tokenizer settings, model capacity, and training duration.
 - The language detector is a Unicode-script heuristic, not a full language-identification model. In particular, it does not distinguish English from other Latin-script languages.
 - PII removal is pattern-based and cannot guarantee that all identifying information is removed. Review data handling carefully before sharing or using the dataset.
-- The included data appears to contain user comments about healthcare providers. Confirm that you have the necessary rights and permissions to use or redistribute it. Do not publish private, identifying, or otherwise restricted data in a public repository.
+- The Google Drive dataset appears to contain user comments about healthcare providers. Confirm that you have the necessary rights and permissions to use or redistribute it. Do not publish private, identifying, or otherwise restricted data in a public repository. The dataset is excluded from Git by `.gitignore`; if it was already tracked in an existing clone, remove it from the Git index with `git rm --cached comments_raw_canonical.csv` before committing. This does not erase the file from earlier Git history.
 - GPU acceleration requires a compatible NVIDIA driver, CUDA-enabled PyTorch build, and supported hardware. The code falls back to CPU if CUDA is unavailable.
 - The checkpoint does not include the tokenizer, and no checkpoint-loading function is provided yet (see [Training, early stopping and checkpoints](#training-early-stopping-and-checkpoints)).
 - The training script's default run includes a small built-in demonstration before the CSV workflow. Use `--only-pipeline` to skip that first demonstration.

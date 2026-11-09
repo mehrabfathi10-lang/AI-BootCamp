@@ -1,0 +1,9 @@
+# Dataset downloaded from Google Drive (do not commit it to GitHub)
+comments_raw_canonical.csv
+
+# Local Python environments and generated artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.pt
+.pytest_cache/
