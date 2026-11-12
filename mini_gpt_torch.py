@@ -70,7 +70,7 @@ def ensure_dataset_available(csv_path):
             url=DATASET_DOWNLOAD_URL,
             output=csv_path,
             quiet=False,
-            fuzzy=True,
+            
         )
     except Exception as exc:
         if os.path.isfile(csv_path):
